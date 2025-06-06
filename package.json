@@ -1,0 +1,15 @@
+{
+  "name": "hello-world-app",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . HelloWorld --platform=darwin --arch=x64 --out=dist --overwrite"
+  },
+  "dependencies": {
+    "python-shell": "^5.0.0"
+  },
+  "devDependencies": {
+    "electron": "^25.0.0"
+  }
+}

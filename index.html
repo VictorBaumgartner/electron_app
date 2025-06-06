@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hello World</title>
+</head>
+<body>
+  <h1>Hello World!</h1>
+  <p>Python Output: <span id="python-output">Waiting for Python...</span></p>
+  <script>
+    const { ipcRenderer } = require('electron');
+    ipcRenderer.on('python-output', (event, message) => {
+      console.log('Received Python output:', message); // Debug log
+      document.getElementById('python-output').innerText = message;
+    });
+  </script>
+</body>
+</html>
