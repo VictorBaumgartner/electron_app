@@ -28,28 +28,44 @@ function createWindow() {
 
   win.loadFile("index.html");
 
-  const options = {
-    mode: "text",
-    pythonPath: pythonExecutable, // Use our determined path
-    pythonOptions: ["-u"], // get print results in real-time
-    scriptPath: scriptPath, // Tell python-shell where to find the script
-  };
+  // Wait for the window to be ready before running the Python script
+  win.webContents.on("did-finish-load", () => {
+    const options = {
+      mode: "text",
+      pythonPath: pythonExecutable, // Use our determined path
+      pythonOptions: ["-u"], // get print results in real-time
+      scriptPath: scriptPath, // Tell python-shell where to find the script
+    };
 
-  PythonShell.run("script.py", options, (err, results) => {
-    if (err) {
+    const pyShell = new PythonShell("script.py", options);
+
+    // Listen for messages from the Python script
+    pyShell.on("message", (message) => {
+      // Received a message from the Python script
+      console.log("Python output:", message);
+      win.webContents.send("python-output", message);
+    });
+
+    // Listen for any errors
+    pyShell.on("error", (err) => {
       console.error("Python error:", err);
-      // Send a more detailed error for debugging
       win.webContents.send(
         "python-output",
         `Error: ${err.message}\nTraceback: ${err.stack}`,
       );
-      return;
-    }
-    console.log("Python results:", results);
-    win.webContents.send(
-      "python-output",
-      results ? results.join("\n") : "Script finished with no output.",
-    );
+    });
+
+    // End the stream when the script finishes
+    pyShell.end((err, code, signal) => {
+      if (err) {
+        console.error("Python error during script execution:", err);
+        return;
+      }
+      console.log(
+        `Python script finished with code ${code} and signal ${signal}`,
+      );
+      win.webContents.send("python-output", "Script finished.");
+    });
   });
 }
 
