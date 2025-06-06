@@ -3,18 +3,14 @@
 # Exit on any error
 set -e
 
-echo "🚀 Starting packaging process..."
+echo "🚀 Starting packaging process with electron-builder..."
 
-# Run npm package command
-echo "📦 Running npm package..."
+# Run electron-builder. It will create the DMG in the 'dist' folder.
+# The command comes from the "scripts" section of package.json.
 npm run package
 
-# Create DMG file
-echo "📦 Creating DMG file..."
-create-dmg --no-sign 'dist/HelloWorld-darwin-x64/HelloWorld.app' dist
+echo "✅ Process completed successfully!"
+echo "📦 Your DMG can be found in the 'dist' directory."
 
-# Open the app for testing
-echo "🔍 Opening app for testing..."
-open dist/HelloWorld-darwin-x64/HelloWorld.app
-
-echo "✅ Process completed successfully!" 
+# Optional: Open the output directory
+open dist
