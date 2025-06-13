@@ -521,17 +521,15 @@
 #     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
-
 import shutil
 import asyncio
 import os
-import json
+import csv
 import re
 from urllib.parse import urljoin, urlparse, urlunparse
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from typing import List, Dict, Any, Tuple, Optional, Set
-import csv
 import io
 from concurrent.futures import ThreadPoolExecutor
 import aiohttp
@@ -574,6 +572,7 @@ COMMON_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 EXCLUDE_KEYWORDS = ['pdf', 'jpeg', 'jpg', 'png', 'webp', 'login', 'signup']
+DEFAULT_OUTPUT_DIR = os.path.expanduser("~/Desktop/crawled_data")
 
 # Pydantic Models for WebSocket Message Payloads
 class StartCrawlPayload(BaseModel):
@@ -1028,7 +1027,6 @@ async def process_and_save_sitemap(effective_url: str, output_path: str, websock
             send_sitemap_progress.last_sent = current_time
     
     await send_sitemap_progress("Sitemap processing started.")
-    logger.info(f"Sitemap crawler availability: {SITEMAP_CRAWLER_AVAILABLE}")
     if not SITEMAP_CRAWLER_AVAILABLE:
         error_msg = "Sitemap crawler module not available."
         sitemap_results.update({"status": "skipped", "error": error_msg})
@@ -1038,7 +1036,6 @@ async def process_and_save_sitemap(effective_url: str, output_path: str, websock
     try:
         async with aiohttp.ClientSession(headers=COMMON_HEADERS) as session:
             sitemap_entries = await get_sitemap_data_for_single_url(effective_url, session)
-        logger.debug(f"Raw sitemap entries for {effective_url}: {len(sitemap_entries)} entries")
         
         # Validate sitemap URLs
         valid_entries = []
@@ -1048,49 +1045,31 @@ async def process_and_save_sitemap(effective_url: str, output_path: str, websock
                 logger.debug(f"Skipping invalid sitemap URL {url}: {error}")
                 continue
             valid_entries.append((validated_url, lastmod))
-        logger.debug(f"Valid sitemap entries for {effective_url}: {len(valid_entries)} entries")
         
         sitemap_results["total_sitemap_entries_returned_by_crawler_module"] = len(sitemap_entries)
         sitemap_results["valid_sitemap_entries"] = len(valid_entries)
-
-        # Save as CSV (always create file, even if empty)
-        csv_path = Path(output_path) / "sitemap_data.csv"
-        logger.info(f"Preparing to save sitemap CSV to: {csv_path}")
-        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["normalized_url", "lastmod_iso"])
-            if valid_entries:
-                writer.writerows(valid_entries)
-            else:
-                writer.writerow(["# No valid sitemap entries found"])
-        
-        # Save as JSON (from previous update)
-        json_path = Path(output_path) / "sitemap_data.json"
-        logger.info(f"Preparing to save sitemap JSON to: {json_path}")
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(
-                [{"url": url, "lastmod": lastmod} for url, lastmod in valid_entries],
-                f,
-                indent=2,
-                ensure_ascii=False
-            )
-        
         if not valid_entries:
             error_msg = "No valid URLs with lastmod found in sitemap."
             sitemap_results.update({"status": "no_valid_sitemap_data_found_by_module", "error": error_msg})
-            await send_sitemap_progress(f"No valid sitemap data found. Empty CSV and JSON files created.", {"csv_path": str(csv_path), "json_path": str(json_path)})
+            await send_sitemap_progress(f"No valid sitemap data found.")
             return sitemap_results
 
+        # Save as CSV
+        csv_path = Path(output_path) / "sitemap_data.csv"
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["url", "last_modified"])
+            writer.writerows(valid_entries)
+        logger.info(f"Saved sitemap data to CSV: {csv_path}")
+        
         sitemap_results.update({
             "status": "success",
             "sitemap_csv_path": str(csv_path),
-            "sitemap_json_path": str(json_path),
             "sitemap_urls_found_with_valid_lastmod": len(valid_entries)
         })
         await send_sitemap_progress(
-            f"Successfully saved {len(valid_entries)} sitemap URLs to CSV and JSON.",
-            {"csv_path": str(csv_path), "json_path": str(json_path)}
+            f"Successfully saved {len(valid_entries)} sitemap URLs to CSV.",
+            {"csv_path": str(csv_path)}
         )
     except Exception as e:
         logger.error(f"Sitemap processing error for {effective_url}: {e}", exc_info=True)
@@ -1106,14 +1085,14 @@ async def run_crawl_and_notify(websocket: WebSocket, payload: StartCrawlPayload)
         manager.connection_states[websocket] = True
         overall_results = {"per_url_results": {}}
 
-        os.makedirs(os.path.abspath(payload.output_dir), exist_ok=True)
+        os.makedirs(os.path.abspath(DEFAULT_OUTPUT_DIR), exist_ok=True)
         for url_input in payload.urls:
             await manager.send_personal_message({"type": "info", "message": f"Starting processing for URL: {url_input}"}, websocket)
             schemed_url = prepare_initial_url_scheme(url_input)
             
             crawl_summary = await crawl_website_single_site(
                 start_url_original_schemed=schemed_url,
-                output_dir=payload.output_dir,
+                output_dir=DEFAULT_OUTPUT_DIR,
                 max_concurrency=payload.max_concurrency,
                 max_depth=payload.max_depth,
                 websocket=websocket
@@ -1130,7 +1109,7 @@ async def run_crawl_and_notify(websocket: WebSocket, payload: StartCrawlPayload)
                 with open(metadata_path, "w", encoding="utf-8") as f:
                     json.dump({"crawl_summary_snapshot": crawl_summary}, f, indent=2, ensure_ascii=False)
                 
-                zip_base_name = os.path.join(payload.output_dir, f"{os.path.basename(site_path)}_output")
+                zip_base_name = os.path.join(DEFAULT_OUTPUT_DIR, f"{os.path.basename(site_path)}_output")
                 zip_file = create_zip_archive(site_path, zip_base_name)
                 
                 if zip_file:

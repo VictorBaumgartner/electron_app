@@ -7,3 +7,4 @@ crawl4ai
 aiohttp
 psutil
 fake-http-header
+playwright
