@@ -1,2 +1,9 @@
-fastapi==0.111.0
-uvicorn==0.30.1 
+# Web Framework & Server
+fastapi
+uvicorn[standard]
+
+# Core Logic
+crawl4ai
+aiohttp
+psutil
+fake-http-header

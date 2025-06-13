@@ -1,4 +1,9 @@
-dist
-node_modules
-.DS_Store
-python-portable
+dist/
+venv/
+**/__pycache__/
+**/.DS_Store
+python-portable/
+**/crawled_data/
+**/venv/
+node_modules/
+*.swp
