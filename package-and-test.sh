@@ -112,7 +112,7 @@ fi
 # 9. Remove macOS quarantine attributes from the packaged app
 if [ -f "dist/ElectronCrawler.app/Contents/Info.plist" ]; then
     echo "🔓 Removing macOS quarantine attributes..."
-    xattr -cr ./dist/ElectronCrawler.app
+    xattr -cr ./dist/electroncrawler.app
     echo "✅ Quarantine attributes removed."
 else
     echo "⚠️ No ElectronCrawler.app found, skipping xattr."
