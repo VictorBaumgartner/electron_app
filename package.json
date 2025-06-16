@@ -5,8 +5,9 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "package": "electron-builder",
-    "dist": "electron-builder",
+    "build-python": "bash ./python-and-shell.sh",
+    "package": "npm run build-python && electron-builder",
+    "dist": "npm run build-python && electron-builder",
     "postinstall": "electron-builder install-app-deps"
   },
   "devDependencies": {
@@ -29,16 +30,12 @@
       {
         "from": "./python-portable/",
         "to": "python-portable",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "./python/",
         "to": "app/python",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       }
     ]
   }
