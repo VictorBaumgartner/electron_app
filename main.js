@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
+const log = require("electron-log");
 
 let pythonProcess = null;
 let mainWindow = null;
@@ -8,15 +9,10 @@ let mainWindow = null;
 function getPythonPath() {
     // If we are packaged, the python executable is in the resources path
     if (app.isPackaged) {
-        // The path will be /Applications/YourApp.app/Contents/Resources/python-portable/bin/python3
         return path.join(process.resourcesPath, 'python-portable', 'bin', 'python3');
     }
-    // In development, use the system's python3
-    // Make sure 'python3' is in your system's PATH and has the required packages installed for development.
-    // Or point to a local venv: path.join(__dirname, 'venv', 'bin', 'python')
-    // return 'python3';
+    // In development, use the portable Python in the project directory
     return path.join(__dirname, 'python-portable', 'bin', 'python3');
-
 }
 
 function getScriptPath() {
@@ -28,25 +24,38 @@ function getScriptPath() {
     return path.join(__dirname, 'python', 'main.py');
 }
 
+function getPlaywrightBrowsersPath() {
+    // Set the path where Playwright stores its browser binaries
+    if (app.isPackaged) {
+        return path.join(process.resourcesPath, 'python-portable', 'lib', 'playwright');
+    }
+    return path.join(__dirname, 'python-portable', 'lib', 'playwright');
+}
+
 function startPythonBackend() {
     const pythonExecutable = getPythonPath();
     const scriptPath = getScriptPath();
     const scriptDir = path.dirname(scriptPath);
+    const playwrightBrowsersPath = getPlaywrightBrowsersPath();
 
-    console.log(`Starting Python backend...`);
-    console.log(`Executable: ${pythonExecutable}`);
-    console.log(`Script: ${scriptPath}`);
-    console.log(`CWD: ${scriptDir}`);
+    log.info(`Starting Python backend...`);
+    log.info(`Python Executable: ${pythonExecutable}`);
+    log.info(`Script Path: ${scriptPath}`);
+    log.info(`Working Directory: ${scriptDir}`);
+    log.info(`Playwright Browsers Path: ${playwrightBrowsersPath}`);
+
+    // Set PLAYWRIGHT_BROWSERS_PATH environment variable for Playwright
+    const env = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: playwrightBrowsersPath };
 
     pythonProcess = spawn(pythonExecutable, [scriptPath], {
-        cwd: scriptDir, // Set the working directory to the script's location
-        stdio: ['pipe', 'pipe', 'pipe'] // Use pipes for stdin, stdout, stderr
+        cwd: scriptDir,
+        env: env,
+        stdio: ['pipe', 'pipe', 'pipe']
     });
 
     pythonProcess.stdout.on('data', (data) => {
         const message = data.toString();
-        console.log(`Python stdout: ${message}`);
-        // You can forward messages to the renderer process if needed
+        log.info(`Python stdout: ${message}`);
         if (mainWindow) {
             mainWindow.webContents.send('python-message', message);
         }
@@ -54,19 +63,19 @@ function startPythonBackend() {
 
     pythonProcess.stderr.on('data', (data) => {
         const message = data.toString();
-        console.error(`Python stderr: ${message}`);
+        log.error(`Python stderr: ${message}`);
         if (mainWindow) {
             mainWindow.webContents.send('python-error', message);
         }
     });
 
     pythonProcess.on('close', (code) => {
-        console.log(`Python process exited with code ${code}`);
+        log.info(`Python process exited with code ${code}`);
         pythonProcess = null;
     });
 
     pythonProcess.on('error', (err) => {
-        console.error('Failed to start Python process:', err);
+        log.error('Failed to start Python process:', err.message);
     });
 }
 
@@ -96,11 +105,10 @@ app.whenReady().then(() => {
     });
 });
 
-// Gracefully kill the python process when the app closes
 function killPythonProcess() {
     if (pythonProcess) {
-        console.log('Terminating Python process...');
-        pythonProcess.kill('SIGTERM'); // Send termination signal
+        log.info('Terminating Python process...');
+        pythonProcess.kill('SIGTERM');
         pythonProcess = null;
     }
 }
