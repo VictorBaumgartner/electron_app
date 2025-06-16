@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status.
 set -e
 
 # --- Configuration ---
-PYTHON_VERSION="3.9.18" # Using a Python 3.9 version to match your original venv
+PYTHON_VERSION="3.9.18"
 RELEASE_DATE="20231002"
 
 # --- Architecture Detection for macOS ---
@@ -55,10 +54,19 @@ python-portable/bin/python3 -m pip install --upgrade pip
 python-portable/bin/python3 -m pip install -r python/requirements.txt
 echo "✅ Python dependencies installed."
 
-# 6. Run electron-builder to package the application
+# 6. Install Playwright browsers
+echo "🌐 Installing Playwright browsers..."
+python-portable/bin/python3 -m playwright install --with-deps
+echo "✅ Playwright browsers installed."
+
+# 7. Run electron-builder to package the application
 echo "📦 Packaging the Electron app..."
-# The 'npm run package' command is defined in package.json to run 'electron-builder'
 npm run package
+
+# 8. Remove macOS quarantine attributes from the packaged app
+echo "🔓 Removing macOS quarantine attributes..."
+xattr -cr ./dist/ElectronCrawler.app
+echo "✅ Quarantine attributes removed."
 
 echo "🎉 Build process completed successfully!"
 echo "📦 Your application can be found in the 'dist' directory."

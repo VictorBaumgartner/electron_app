@@ -520,12 +520,12 @@
 #     logger.info("Starting FastAPI application with WebSocket support...")
 #     uvicorn.run(app, host="0.0.0.0", port=8000)
 
-
 import shutil
 import asyncio
 import os
 import csv
 import re
+import json  # Added json import
 from urllib.parse import urljoin, urlparse, urlunparse
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
@@ -542,7 +542,7 @@ import logging
 import sys
 from pathlib import Path
 from time import time
-from urllib.parse import unquote  # For URL decoding
+from urllib.parse import unquote
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -1106,8 +1106,22 @@ async def run_crawl_and_notify(websocket: WebSocket, payload: StartCrawlPayload)
                 crawl_summary["sitemap_processing_results"] = sitemap_summary
 
                 metadata_path = Path(site_path) / "crawl_metadata.json"
-                with open(metadata_path, "w", encoding="utf-8") as f:
-                    json.dump({"crawl_summary_snapshot": crawl_summary}, f, indent=2, ensure_ascii=False)
+                metadata_content = {
+                    "crawl_summary_snapshot": crawl_summary,
+                    "timestamp": time(),
+                    "input_url": url_input,
+                    "effective_url": effective_url
+                }
+                try:
+                    with open(metadata_path, "w", encoding="utf-8") as f:
+                        json.dump(metadata_content, f, indent=2, ensure_ascii=False)
+                    logger.info(f"Saved metadata to: {metadata_path}")
+                except Exception as e:
+                    logger.error(f"Failed to save metadata to {metadata_path}: {e}")
+                    await manager.send_personal_message({
+                        "type": "error",
+                        "message": f"Failed to save metadata for {url_input}: {str(e)}"
+                    }, websocket)
                 
                 zip_base_name = os.path.join(DEFAULT_OUTPUT_DIR, f"{os.path.basename(site_path)}_output")
                 zip_file = create_zip_archive(site_path, zip_base_name)
