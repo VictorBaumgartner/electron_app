@@ -4,85 +4,81 @@
 set -e
 
 # --- Configuration ---
-PYTHON_VERSION="3.9.18"
-RELEASE_DATE="20231002"
-PYTHON_TARBALL="python-mac.tar.gz"
+PYTHON_EXECUTABLE="/opt/homebrew/bin/python3.10"  # Homebrew Python 3.10
+VENV_DIR="python-portable/venv"
+PLAYWRIGHT_BROWSERS_PATH="python-portable/lib/playwright"
+CHROMIUM_VERSION="chromium-1169"  # Adjust if Playwright uses a different version
 
-# --- Architecture Detection for macOS ---
+echo "🚀 Starting build process for ElectronCrawler..."
+
+# 1. Verify Python executable
+if [ ! -f "$PYTHON_EXECUTABLE" ]; then
+    echo "❌ Error: Python 3.10 not found at $PYTHON_EXECUTABLE. Install it via: brew install python@3.10"
+    exit 1
+fi
+echo "🐍 Using Python: $PYTHON_EXECUTABLE"
+$PYTHON_EXECUTABLE --version
+
+# 2. Detect architecture
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-    echo "Architecture: Apple Silicon (aarch64)"
-    PYTHON_ARCH="aarch64-apple-darwin"
+    echo "Architecture: Apple Silicon (arm64)"
 elif [ "$ARCH" = "x86_64" ]; then
     echo "Architecture: Intel (x86_64)"
-    PYTHON_ARCH="x86_64-apple-darwin"
 else
     echo "Unsupported architecture: $ARCH"
     exit 1
 fi
 
-PYTHON_DOWNLOAD_URL="https://github.com/indygreg/python-build-standalone/releases/download/${RELEASE_DATE}/cpython-${PYTHON_VERSION}+${RELEASE_DATE}-${PYTHON_ARCH}-install_only.tar.gz"
+# 3. Clean up previous builds
+echo "🧹 Cleaning up old directories..."
+rm -rf python-portable python/dist
+mkdir -p python-portable/lib/playwright
+echo "✅ Cleanup complete."
 
-echo "🚀 Starting build process for ElectronCrawler..."
+# 4. Create a virtual environment for dependency isolation
+echo "🔧 Creating virtual environment..."
+$PYTHON_EXECUTABLE -m venv $VENV_DIR
+source $VENV_DIR/bin/activate
+echo "✅ Virtual environment created."
 
-# 1. Check if python-portable exists
-if [ -d "python-portable" ] && [ -f "python-portable/bin/python3" ]; then
-    echo "✅ python-portable already exists, skipping download and extraction."
-else
-    # 2. Clean up previous builds
-    echo "🧹 Cleaning up old 'python-portable' directory..."
-    rm -rf python-portable
-    echo "✅ Cleanup complete."
-
-    # 3. Download portable Python
-    echo "🐍 Downloading Python portable for your architecture..."
-    curl -L "$PYTHON_DOWNLOAD_URL" -o "$PYTHON_TARBALL"
-    echo "✅ Download complete."
-
-    # 4. Extract Python
-    echo "📦 Extracting Python..."
-    mkdir -p python-portable
-    tar -xzf "$PYTHON_TARBALL" --strip-components=1 -C python-portable
-    echo "✅ Extraction complete."
-
-    # 5. Clean up the downloaded tarball
-    rm "$PYTHON_TARBALL"
+# 5. Install Python dependencies
+echo "🔧 Installing Python dependencies..."
+if [ ! -f "python/requirements.txt" ]; then
+    echo "⚠️ python/requirements.txt not found. Creating minimal requirements.txt."
+    echo "playwright>=1.47.0" > python/requirements.txt
+    echo "pyinstaller>=6.14.1" >> python/requirements.txt
 fi
+pip install --upgrade pip
+pip install -r python/requirements.txt
+echo "✅ Python dependencies installed."
 
-# 6. Install Python dependencies from requirements.txt
-echo "🔧 Checking Python dependencies..."
-if [ -f "python-portable/requirements-installed.txt" ]; then
-    echo "✅ Python dependencies already installed, skipping."
+# 6. Build Python executable with pyinstaller
+echo "🔨 Building Python executable with pyinstaller..."
+cd python
+SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
+if [ -f "dist/main" ]; then
+    echo "✅ Python executable already exists, skipping pyinstaller."
 else
-    if [ ! -f "python/requirements.txt" ]; then
-        echo "❌ Error: requirements.txt not found! Please create it."
-        exit 1
-    fi
-    echo "🔧 Installing Python dependencies into portable environment..."
-    python-portable/bin/python3 -m pip install --upgrade pip
-    python-portable/bin/python3 -m pip install -r python/requirements.txt
-    touch python-portable/requirements-installed.txt
-    echo "✅ Python dependencies installed."
+    pyinstaller --onefile \
+        --add-data "$SITE_PACKAGES/playwright:playwright" \
+        --add-data "$SITE_PACKAGES/playwright/driver:playwright/driver" \
+        main.py
+    chmod +x dist/main
+    echo "✅ Python executable created at python/dist/main."
 fi
+cd ..
 
 # 7. Install Playwright browsers
 echo "🌐 Checking Playwright browsers..."
-# Define expected Chromium path
-CHROMIUM_PATH="python-portable/lib/playwright/chromium-1169/chrome-mac/Chromium.app/Contents/MacOS/Chromium"
+CHROMIUM_PATH="$PLAYWRIGHT_BROWSERS_PATH/$CHROMIUM_VERSION/chrome-mac/Chromium.app/Contents/MacOS/Chromium"
 if [ -f "$CHROMIUM_PATH" ]; then
     echo "✅ Playwright browsers already installed, skipping."
 else
     echo "🌐 Installing Playwright browsers..."
-    # Clean up any incomplete Playwright installs
-    rm -rf python-portable/lib/playwright
-    # Ensure Playwright is installed
-    echo "Checking Playwright version..."
-    python-portable/bin/python3 -m pip show playwright || echo "Playwright not installed!"
-    # Set PLAYWRIGHT_BROWSERS_PATH to ensure browsers are installed in the correct location
-    export PLAYWRIGHT_BROWSERS_PATH=python-portable/lib/playwright
-    # Run playwright install with verbose output and capture errors
+    export PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH
     set +e  # Temporarily disable exit-on-error
-    PLAYWRIGHT_INSTALL_OUTPUT=$(python-portable/bin/python3 -m playwright install --with-deps chromium 2>&1)
+    PLAYWRIGHT_INSTALL_OUTPUT=$(python -m playwright install --with-deps chromium 2>&1)
     PLAYWRIGHT_INSTALL_STATUS=$?
     set -e  # Re-enable exit-on-error
     echo "Playwright install output:"
@@ -98,7 +94,11 @@ else
     echo "✅ Playwright browsers installed."
 fi
 
-# 8. Run electron-builder to package the application
+# 8. Deactivate virtual environment
+deactivate
+echo "✅ Virtual environment deactivated."
+
+# 9. Run electron-builder to package the application
 echo "📦 Packaging the Electron app..."
 if [ -d "dist/ElectronCrawler.app" ]; then
     echo "✅ Electron app already packaged, skipping."

@@ -2,42 +2,24 @@
   "name": "electroncrawler",
   "version": "1.1.0",
   "description": "A crawler application built with Electron, updated for macOS 15 compatibility.",
-  "main": "main.js",
+  "main": "dist-electron/main.js",
+  "type": "module",
   "scripts": {
     "start": "electron .",
-    "build-python": "bash ./package-and-test.sh",
-    "package": "npm run build-python",
-    "dist": "npm run build-python",
-    "postinstall": "electron-builder install-app-deps"
+    "dev": "concurrently \"npm run dev-python\" \"electron .\"",
+    "dev-python": "cd python && python3 main.py",
+    "build": "npm run build-python && npm run build-electron",
+    "build-python": "cd python && pyinstaller -y --clean main.spec && cd ..",
+    "build-electron": "electron-builder",
+    "postinstall": "electron-builder install-app-deps && npm run install-python-deps",
+    "install-python-deps": "python-portable/bin/python3 -m pip install --upgrade pip && python-portable/bin/python3 -m pip install -r python/requirements.txt && python-portable/bin/python3 -m playwright install --with-deps chromium"
   },
   "devDependencies": {
     "electron": "^31.2.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "concurrently": "^9.1.2"
   },
   "dependencies": {
     "electron-log": "^5.4.1"
-  },
-  "build": {
-    "appId": "com.yourcompany.electroncrawler",
-    "productName": "ElectronCrawler",
-    "mac": {
-      "target": "dmg",
-      "entitlements": "entitlements.plist"
-    },
-    "win": {
-      "target": "nsis"
-    },
-    "extraResources": [
-      {
-        "from": "./python-portable/",
-        "to": "python-portable",
-        "filter": ["**/*"]
-      },
-      {
-        "from": "./python/",
-        "to": "app/python",
-        "filter": ["**/*"]
-      }
-    ]
   }
 }

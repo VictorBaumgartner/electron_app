@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.yourcompany.electroncrawler",
+  "asar": true,
+  "productName": "ElectronCrawler",
+  "directories": {
+    "output": "release/${version}"
+  },
+  "files": [
+    "dist-electron",
+    "python"
+  ],
+  "extraResources": [
+    {
+      "from": "python/dist/main",
+      "to": "python-portable",
+      "filter": ["**/*"]
+    },
+    {
+      "from": "python-portable/lib/playwright",
+      "to": "python-portable/lib/playwright",
+      "filter": ["**/*"]
+    }
+  ],
+  "mac": {
+    "target": ["dmg"],
+    "artifactName": "${productName}-Mac-${version}-Installer.${ext}",
+    "entitlements": "entitlements.plist"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": false
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "artifactName": "${productName}-Linux-${version}.${ext}"
+  }
+}

@@ -7,4 +7,5 @@ crawl4ai
 aiohttp
 psutil
 fake-http-header
-playwright
+playwright>=1.47.0
+pyinstaller>=6.14.1
