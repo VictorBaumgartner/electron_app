@@ -2,30 +2,26 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 const log = require("electron-log");
+const fs = require("fs");
 
 let pythonProcess = null;
 let mainWindow = null;
 
 function getPythonPath() {
-    // If we are packaged, the python executable is in the resources path
     if (app.isPackaged) {
         return path.join(process.resourcesPath, 'python-portable', 'bin', 'python3');
     }
-    // In development, use the portable Python in the project directory
     return path.join(__dirname, 'python-portable', 'bin', 'python3');
 }
 
 function getScriptPath() {
-    // If we are packaged, the script is in 'app/python' inside the resources path
     if (app.isPackaged) {
         return path.join(process.resourcesPath, 'app', 'python', 'main.py');
     }
-    // In development, it's in the 'python' folder of your project
     return path.join(__dirname, 'python', 'main.py');
 }
 
 function getPlaywrightBrowsersPath() {
-    // Set the path where Playwright stores its browser binaries
     if (app.isPackaged) {
         return path.join(process.resourcesPath, 'python-portable', 'lib', 'playwright');
     }
@@ -44,7 +40,32 @@ function startPythonBackend() {
     log.info(`Working Directory: ${scriptDir}`);
     log.info(`Playwright Browsers Path: ${playwrightBrowsersPath}`);
 
-    // Set PLAYWRIGHT_BROWSERS_PATH environment variable for Playwright
+    // Validate paths
+    if (!fs.existsSync(pythonExecutable)) {
+        const errorMsg = `Python executable not found at: ${pythonExecutable}`;
+        log.error(errorMsg);
+        if (mainWindow) {
+            mainWindow.webContents.send('python-error', errorMsg);
+        }
+        return false;
+    }
+    if (!fs.existsSync(scriptPath)) {
+        const errorMsg = `Python script not found at: ${scriptPath}`;
+        log.error(errorMsg);
+        if (mainWindow) {
+            mainWindow.webContents.send('python-error', errorMsg);
+        }
+        return false;
+    }
+    if (!fs.existsSync(playwrightBrowsersPath) || !fs.existsSync(path.join(playwrightBrowsersPath, 'chromium'))) {
+        const errorMsg = `Playwright browsers not found at: ${playwrightBrowsersPath}/chromium`;
+        log.warn(errorMsg);
+        if (mainWindow) {
+            mainWindow.webContents.send('python-error', errorMsg);
+        }
+    }
+
+    // Set environment variables
     const env = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: playwrightBrowsersPath };
 
     pythonProcess = spawn(pythonExecutable, [scriptPath], {
@@ -70,13 +91,23 @@ function startPythonBackend() {
     });
 
     pythonProcess.on('close', (code) => {
-        log.info(`Python process exited with code ${code}`);
+        const message = `Python process exited with code ${code}`;
+        log.info(message);
         pythonProcess = null;
+        if (mainWindow) {
+            mainWindow.webContents.send('python-error', message);
+        }
     });
 
     pythonProcess.on('error', (err) => {
-        log.error('Failed to start Python process:', err.message);
+        const errorMsg = `Failed to start Python process: ${err.message}`;
+        log.error(errorMsg);
+        if (mainWindow) {
+            mainWindow.webContents.send('python-error', errorMsg);
+        }
     });
+
+    return true;
 }
 
 function createWindow() {
@@ -91,11 +122,13 @@ function createWindow() {
     });
 
     mainWindow.loadFile("index.html");
-    // mainWindow.webContents.openDevTools(); // Uncomment for debugging
 }
 
 app.whenReady().then(() => {
-    startPythonBackend();
+    const pythonStarted = startPythonBackend();
+    if (!pythonStarted) {
+        mainWindow.webContents.send('python-error', 'Failed to start Python backend. Check logs for details.');
+    }
     createWindow();
 
     app.on("activate", () => {

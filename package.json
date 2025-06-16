@@ -1,13 +1,13 @@
 {
-  "name": "electron_crawler",
+  "name": "electroncrawler",
   "version": "1.1.0",
   "description": "A crawler application built with Electron, updated for macOS 15 compatibility.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build-python": "bash ./package-and-test.sh",
-    "package": "npm run build-python && electron-builder",
-    "dist": "npm run build-python && electron-builder",
+    "package": "npm run build-python",
+    "dist": "npm run build-python",
     "postinstall": "electron-builder install-app-deps"
   },
   "devDependencies": {
@@ -21,7 +21,8 @@
     "appId": "com.yourcompany.electroncrawler",
     "productName": "ElectronCrawler",
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "entitlements": "entitlements.plist"
     },
     "win": {
       "target": "nsis"

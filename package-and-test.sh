@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status.
+# Exit immediately if a command exits with a non-zero status, except where explicitly handled.
 set -e
 
 # --- Configuration ---
@@ -67,11 +67,34 @@ fi
 
 # 7. Install Playwright browsers
 echo "🌐 Checking Playwright browsers..."
-if [ -d "python-portable/lib/playwright" ] && [ -d "python-portable/lib/playwright/chromium" ]; then
+# Define expected Chromium path
+CHROMIUM_PATH="python-portable/lib/playwright/chromium-1169/chrome-mac/Chromium.app/Contents/MacOS/Chromium"
+if [ -f "$CHROMIUM_PATH" ]; then
     echo "✅ Playwright browsers already installed, skipping."
 else
     echo "🌐 Installing Playwright browsers..."
-    python-portable/bin/python3 -m playwright install --with-deps
+    # Clean up any incomplete Playwright installs
+    rm -rf python-portable/lib/playwright
+    # Ensure Playwright is installed
+    echo "Checking Playwright version..."
+    python-portable/bin/python3 -m pip show playwright || echo "Playwright not installed!"
+    # Set PLAYWRIGHT_BROWSERS_PATH to ensure browsers are installed in the correct location
+    export PLAYWRIGHT_BROWSERS_PATH=python-portable/lib/playwright
+    # Run playwright install with verbose output and capture errors
+    set +e  # Temporarily disable exit-on-error
+    PLAYWRIGHT_INSTALL_OUTPUT=$(python-portable/bin/python3 -m playwright install --with-deps chromium 2>&1)
+    PLAYWRIGHT_INSTALL_STATUS=$?
+    set -e  # Re-enable exit-on-error
+    echo "Playwright install output:"
+    echo "$PLAYWRIGHT_INSTALL_OUTPUT"
+    if [ $PLAYWRIGHT_INSTALL_STATUS -ne 0 ]; then
+        echo "❌ Failed to install Playwright browsers! Exit code: $PLAYWRIGHT_INSTALL_STATUS"
+        exit 1
+    fi
+    if [ ! -f "$CHROMIUM_PATH" ]; then
+        echo "❌ Playwright browsers not found after installation at: $CHROMIUM_PATH"
+        exit 1
+    fi
     echo "✅ Playwright browsers installed."
 fi
 
