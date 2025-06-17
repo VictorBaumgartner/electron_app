@@ -1,49 +1,32 @@
 {
-  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "com.yourcompany.electroncrawler",
-  "asar": true,
+  "appId": "com.victor.electroncrawler",
   "productName": "ElectronCrawler",
+  "asar": true,
   "directories": {
     "output": "release/${version}"
   },
   "files": [
-    "dist-electron",
-    "python"
+    "main.js",
+    "preload.js",
+    "index.html",
+    "renderer.js",
+    "package.json"
   ],
   "extraResources": [
     {
       "from": "python/dist/main",
-      "to": "python-portable",
-      "filter": ["**/*"]
+      "to": "python-bin/main"
     },
     {
       "from": "python-portable/lib/playwright",
-      "to": "python-portable/lib/playwright",
-      "filter": ["**/*"]
+      "to": "playwright-browsers"
     }
   ],
   "mac": {
+    "icon": "build/icon.icns",
     "target": ["dmg"],
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}",
+    "hardenedRuntime": true,
     "entitlements": "entitlements.plist"
-  },
-  "win": {
-    "target": [
-      {
-        "target": "nsis",
-        "arch": ["x64"]
-      }
-    ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
-  },
-  "nsis": {
-    "oneClick": false,
-    "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
-  },
-  "linux": {
-    "target": ["AppImage"],
-    "artifactName": "${productName}-Linux-${version}.${ext}"
   }
 }

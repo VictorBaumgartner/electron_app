@@ -1,79 +1,73 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
-const path = require("path");
-const { spawn } = require("child_process");
-const log = require("electron-log");
-const fs = require("fs");
+// main.js - Using CommonJS require() syntax
+
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+const { spawn } = require('child_process');
+const log = require('electron-log');
+const fs = require('fs');
 
 let pythonProcess = null;
 let mainWindow = null;
 
-function getPythonPath() {
-    if (app.isPackaged) {
-        return path.join(process.resourcesPath, 'python-portable', 'bin', 'python3');
-    }
-    return path.join(__dirname, 'python-portable', 'bin', 'python3');
-}
-
-function getScriptPath() {
-    if (app.isPackaged) {
-        return path.join(process.resourcesPath, 'app', 'python', 'main.py');
-    }
-    return path.join(__dirname, 'python', 'main.py');
-}
-
-function getPlaywrightBrowsersPath() {
-    if (app.isPackaged) {
-        return path.join(process.resourcesPath, 'python-portable', 'lib', 'playwright');
-    }
-    return path.join(__dirname, 'python-portable', 'lib', 'playwright');
-}
-
 function startPythonBackend() {
-    const pythonExecutable = getPythonPath();
-    const scriptPath = getScriptPath();
-    const scriptDir = path.dirname(scriptPath);
-    const playwrightBrowsersPath = getPlaywrightBrowsersPath();
+    const isProd = app.isPackaged;
+    let executablePath;
+    let playwrightBrowsersPath;
+    let spawnArgs = [];
 
-    log.info(`Starting Python backend...`);
-    log.info(`Python Executable: ${pythonExecutable}`);
-    log.info(`Script Path: ${scriptPath}`);
-    log.info(`Working Directory: ${scriptDir}`);
+    // --- Determine Paths and Arguments based on Environment ---
+    if (isProd) {
+        // --- PRODUCTION ---
+        // In the packaged app, we run the compiled single-file executable.
+        executablePath = path.join(process.resourcesPath, 'python-bin', 'main');
+
+        // The Playwright browsers were bundled into this specific folder.
+        playwrightBrowsersPath = path.join(process.resourcesPath, 'playwright-browsers');
+
+        // No extra arguments are needed for the executable.
+        spawnArgs = [];
+
+    } else {
+        // --- DEVELOPMENT ---
+        // In development, we use the Python interpreter from our virtual environment.
+        executablePath = path.join(app.getAppPath(), 'python', 'venv', 'bin', 'python');
+
+        // Playwright browsers were installed here by our setup script.
+        playwrightBrowsersPath = path.join(app.getAppPath(), 'python-portable', 'lib', 'playwright');
+
+        // We need to tell the interpreter which script to run.
+        spawnArgs = [path.join(app.getAppPath(), 'python', 'main.py')];
+    }
+
+    console.log("TEST")
+    log.info(`--- Python Backend Setup (${isProd ? 'PRODUCTION' : 'DEVELOPMENT'}) ---`);
+    log.info(`Executable Path: ${executablePath}`);
+    log.info(`Spawn Arguments: [${spawnArgs.join(', ')}]`);
     log.info(`Playwright Browsers Path: ${playwrightBrowsersPath}`);
 
-    // Validate paths
-    if (!fs.existsSync(pythonExecutable)) {
-        const errorMsg = `Python executable not found at: ${pythonExecutable}`;
+    // --- Validate Paths ---
+    if (!fs.existsSync(executablePath)) {
+        const errorMsg = `Python backend executable not found at: ${executablePath}`;
         log.error(errorMsg);
         if (mainWindow) {
             mainWindow.webContents.send('python-error', errorMsg);
         }
-        return false;
+        return false; // Critical error, cannot continue.
     }
-    if (!fs.existsSync(scriptPath)) {
-        const errorMsg = `Python script not found at: ${scriptPath}`;
-        log.error(errorMsg);
-        if (mainWindow) {
-            mainWindow.webContents.send('python-error', errorMsg);
-        }
-        return false;
-    }
-    if (!fs.existsSync(playwrightBrowsersPath) || !fs.existsSync(path.join(playwrightBrowsersPath, 'chromium'))) {
-        const errorMsg = `Playwright browsers not found at: ${playwrightBrowsersPath}/chromium`;
-        log.warn(errorMsg);
-        if (mainWindow) {
-            mainWindow.webContents.send('python-error', errorMsg);
-        }
+    if (!fs.existsSync(playwrightBrowsersPath)) {
+        const errorMsg = `Playwright browsers directory not found at: ${playwrightBrowsersPath}`;
+        log.warn(errorMsg); // Log as a warning, as the Python script might handle it.
     }
 
-    // Set environment variables
+    // --- Set Environment Variable and Spawn Process ---
     const env = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: playwrightBrowsersPath };
 
-    pythonProcess = spawn(pythonExecutable, [scriptPath], {
-        cwd: scriptDir,
+    pythonProcess = spawn(executablePath, spawnArgs, {
         env: env,
         stdio: ['pipe', 'pipe', 'pipe']
     });
 
+    // --- Process Event Listeners ---
     pythonProcess.stdout.on('data', (data) => {
         const message = data.toString();
         log.info(`Python stdout: ${message}`);
@@ -117,7 +111,7 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: path.join(__dirname, "preload.js"),
+            preload: path.join(__dirname, "preload.js"), // In CJS, __dirname is available and reliable
         },
     });
 
@@ -125,11 +119,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    createWindow();
+    
     const pythonStarted = startPythonBackend();
     if (!pythonStarted) {
-        mainWindow.webContents.send('python-error', 'Failed to start Python backend. Check logs for details.');
+        mainWindow.webContents.send('python-error', 'Fatal: Could not start Python backend. Check main process logs.');
     }
-    createWindow();
 
     app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -141,7 +136,7 @@ app.whenReady().then(() => {
 function killPythonProcess() {
     if (pythonProcess) {
         log.info('Terminating Python process...');
-        pythonProcess.kill('SIGTERM');
+        pythonProcess.kill('SIGKILL');
         pythonProcess = null;
     }
 }

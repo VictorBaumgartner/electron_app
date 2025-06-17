@@ -7,3 +7,9 @@ python-portable/
 **/venv/
 node_modules/
 *.swp
+python/venv/
+node_modules/
+build/
+dist/
+entitlements.plist
+release/

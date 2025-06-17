@@ -2,22 +2,25 @@
   "name": "electroncrawler",
   "version": "1.1.0",
   "description": "A crawler application built with Electron, updated for macOS 15 compatibility.",
-  "main": "dist-electron/main.js",
-  "type": "module",
+  "author": "Victor victorbongard@hotmail.com",
+  "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "concurrently \"npm run dev-python\" \"electron .\"",
-    "dev-python": "cd python && python3 main.py",
+    "dev-python": "python/venv/bin/python python/main.py",
     "build": "npm run build-python && npm run build-electron",
-    "build-python": "cd python && pyinstaller -y --clean main.spec && cd ..",
-    "build-electron": "electron-builder",
-    "postinstall": "electron-builder install-app-deps && npm run install-python-deps",
-    "install-python-deps": "python-portable/bin/python3 -m pip install --upgrade pip && python-portable/bin/python3 -m pip install -r python/requirements.txt && python-portable/bin/python3 -m playwright install --with-deps chromium"
+    "build-python": "python/venv/bin/python -m PyInstaller -y --clean python/main.spec",
+    "build-electron": "electron-builder --mac",
+    "postinstall": "electron-builder install-app-deps && npm run setup-python",
+    "setup-python": "npm run setup-venv && npm run install-python-deps && npm run install-playwright-browsers",
+    "setup-venv": "python-portable/bin/python3 -m venv python/venv",
+    "install-python-deps": "python/venv/bin/pip install --upgrade pip && python/venv/bin/pip install -r python/requirements.txt",
+    "install-playwright-browsers": "PLAYWRIGHT_BROWSERS_PATH=python-portable/lib/playwright python/venv/bin/python -m playwright install --with-deps chromium"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "electron": "^31.2.0",
-    "electron-builder": "^24.13.3",
-    "concurrently": "^9.1.2"
+    "electron-builder": "^24.13.3"
   },
   "dependencies": {
     "electron-log": "^5.4.1"
